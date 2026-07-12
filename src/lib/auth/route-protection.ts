@@ -7,7 +7,6 @@
 export const publicRoutes = [
   '/', // 首页
   '/map-square', // 地图广场
-  '/test', // 测试页面
 ];
 
 // 需要登录才能访问的受保护路由
