@@ -1,15 +1,6 @@
-import createMiddleware from 'next-intl/middleware';
 import { NextRequest, NextResponse } from 'next/server';
-import { locales, defaultLocale } from './i18n/config';
-import { isProtectedPath, isPublicPath } from './lib/auth/route-protection';
+import { isProtectedPath } from './lib/auth/route-protection';
 import { isAuthenticated } from './lib/auth/auth-helpers';
-
-// 创建 next-intl 中间件
-const intlMiddleware = createMiddleware({
-  locales,
-  defaultLocale,
-  localePrefix: 'always'
-});
 
 /**
  * 主中间件函数
@@ -36,7 +27,7 @@ export default async function middleware(request: NextRequest) {
     // 受保护路由：需要登录
     if (!isUserAuthenticated) {
       // 未登录，重定向到首页
-      const url = new URL(`/${defaultLocale}`, request.url);
+      const url = new URL('/', request.url);
       
       // 添加重定向参数，记录用户原本想访问的页面
       url.searchParams.set('redirect', pathname);
@@ -48,8 +39,8 @@ export default async function middleware(request: NextRequest) {
     }
   }
 
-  // 4. 执行国际化中间件
-  return intlMiddleware(request);
+  // 4. 继续处理
+  return NextResponse.next();
 }
 
 export const config = {

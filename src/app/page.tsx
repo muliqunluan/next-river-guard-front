@@ -12,11 +12,7 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import useUserStore from "@/lib/stores/useUserStore";
 
-interface LocalePageProps {
-    params: Promise<{ locale: string }>;
-}
-
-export default function LocalePage({ params }: LocalePageProps) {
+export default function HomePage() {
     const router = useRouter();
     const { isAuthenticated, isLoading, loadUser } = useUserStore();
 
@@ -25,9 +21,8 @@ export default function LocalePage({ params }: LocalePageProps) {
         loadUser();
     }, [loadUser]);
 
-    const handleNavigate = async (link: string) => {
-        const { locale } = await params;
-        router.push(`/${locale}${link}`);
+    const handleNavigate = (link: string) => {
+        router.push(link);
     };
 
     // 加载中显示骨架屏

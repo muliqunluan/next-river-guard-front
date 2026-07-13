@@ -7,7 +7,6 @@ import { useMutation } from "@tanstack/react-query"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { z } from "zod"
-import { useTranslations } from 'next-intl';
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import {
@@ -39,29 +38,28 @@ interface LoginDialogProps {
 export function AuthDialog({ open, onOpenChange }: LoginDialogProps) {
   const router = useRouter();
   const { signIn, signUp, isAuthenticated } = useUserStore();
-  const t = useTranslations('auth');
 
   // 登录表单验证模式
   const loginSchema = z.object({
     email: z.string()
-      .min(1, t('emailRequired'))
-      .email(t('invalidEmail')),
+      .min(1, "请输入邮箱")
+      .email("请输入有效的邮箱地址"),
     password: z.string()
-      .min(1, t('passwordRequired'))
-      .min(6, t('passwordTooShort')),
+      .min(1, "请输入密码")
+      .min(6, "密码至少需要 6 个字符"),
   })
 
   // 注册表单验证模式
   const registerSchema = loginSchema.extend({
     firstName: z.string()
-      .min(1, t('firstNameRequired'))
+      .min(1, "请输入名字")
       .trim(),
     lastName: z.string()
       .optional(),
     confirmPassword: z.string()
-      .min(1, t('confirmPasswordRequired')),
+      .min(1, "请确认密码"),
   }).refine((data) => data.password === data.confirmPassword, {
-    message: t('passwordsNotMatch'),
+    message: "两次输入的密码不一致",
     path: ["confirmPassword"],
   })
 
@@ -99,7 +97,7 @@ export function AuthDialog({ open, onOpenChange }: LoginDialogProps) {
     },
     onSuccess: () => {
       // 登录成功
-      toast.success(t('loginSuccess'), { id: 'login-success' });
+      toast.success("登录成功", { id: 'login-success' });
       loginForm.reset();
       setTimeout(() => {
         onOpenChange(false);
@@ -108,7 +106,7 @@ export function AuthDialog({ open, onOpenChange }: LoginDialogProps) {
     },
     onError: (error: Error) => {
       // 登录失败
-      toast.error(error.message || t('loginError'), { id: 'login-error' });
+      toast.error(error.message || "登录失败，请重试", { id: 'login-error' });
     },
   });
 
@@ -119,7 +117,7 @@ export function AuthDialog({ open, onOpenChange }: LoginDialogProps) {
     },
     onSuccess: () => {
       // 注册成功
-      toast.success(t('registerSuccess'), { id: 'register-success' });
+      toast.success("注册成功", { id: 'register-success' });
       registerForm.reset();
       setTimeout(() => {
         onOpenChange(false);
@@ -128,7 +126,7 @@ export function AuthDialog({ open, onOpenChange }: LoginDialogProps) {
     },
     onError: (error: Error) => {
       // 注册失败
-      toast.error(error.message || t('registerError'), { id: 'register-error' });
+      toast.error(error.message || "注册失败，请重试", { id: 'register-error' });
     },
   });
 
@@ -215,7 +213,7 @@ export function AuthDialog({ open, onOpenChange }: LoginDialogProps) {
       >
         <DialogHeader>
           <DialogTitle className="text-2xl">
-            {currentIsLoginMode ? t('login') : t('register')}
+            {currentIsLoginMode ? "登录" : "注册"}
           </DialogTitle>
         </DialogHeader>
 
@@ -228,11 +226,11 @@ export function AuthDialog({ open, onOpenChange }: LoginDialogProps) {
                 name="email"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>{t('email')}</FormLabel>
+                    <FormLabel>邮箱</FormLabel>
                     <FormControl>
                       <Input
                         type="email"
-                        placeholder={t('emailPlaceholder')}
+                        placeholder="请输入您的邮箱"
                         disabled={isPending}
                         {...field}
                       />
@@ -248,11 +246,11 @@ export function AuthDialog({ open, onOpenChange }: LoginDialogProps) {
                 name="password"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>{t('password')}</FormLabel>
+                    <FormLabel>密码</FormLabel>
                     <FormControl>
                       <Input
                         type="password"
-                        placeholder={t('passwordPlaceholder')}
+                        placeholder="请输入您的密码"
                         disabled={isPending}
                         {...field}
                       />
@@ -268,7 +266,7 @@ export function AuthDialog({ open, onOpenChange }: LoginDialogProps) {
                 className="w-full"
                 disabled={isPending}
               >
-                {isPending ? t('loggingIn') : t('login')}
+                {isPending ? "登录中..." : "登录"}
               </Button>
             </form>
           </Form>
@@ -281,11 +279,11 @@ export function AuthDialog({ open, onOpenChange }: LoginDialogProps) {
                 name="email"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>{t('email')}</FormLabel>
+                    <FormLabel>邮箱</FormLabel>
                     <FormControl>
                       <Input
                         type="email"
-                        placeholder={t('emailPlaceholder')}
+                        placeholder="请输入您的邮箱"
                         disabled={isPending}
                         {...field}
                       />
@@ -301,11 +299,11 @@ export function AuthDialog({ open, onOpenChange }: LoginDialogProps) {
                 name="firstName"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>{t('firstName')}</FormLabel>
+                    <FormLabel>名字</FormLabel>
                     <FormControl>
                       <Input
                         type="text"
-                        placeholder={t('firstNamePlaceholder')}
+                        placeholder="请输入您的名字"
                         disabled={isPending}
                         {...field}
                       />
@@ -321,11 +319,11 @@ export function AuthDialog({ open, onOpenChange }: LoginDialogProps) {
                 name="lastName"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>{t('lastName')}</FormLabel>
+                    <FormLabel>姓氏（可选）</FormLabel>
                     <FormControl>
                       <Input
                         type="text"
-                        placeholder={t('lastNamePlaceholder')}
+                        placeholder="请输入您的姓氏"
                         disabled={isPending}
                         {...field}
                       />
@@ -341,11 +339,11 @@ export function AuthDialog({ open, onOpenChange }: LoginDialogProps) {
                 name="password"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>{t('password')}</FormLabel>
+                    <FormLabel>密码</FormLabel>
                     <FormControl>
                       <Input
                         type="password"
-                        placeholder={t('passwordPlaceholder')}
+                        placeholder="请输入您的密码"
                         disabled={isPending}
                         {...field}
                       />
@@ -361,11 +359,11 @@ export function AuthDialog({ open, onOpenChange }: LoginDialogProps) {
                 name="confirmPassword"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>{t('confirmPassword')}</FormLabel>
+                    <FormLabel>确认密码</FormLabel>
                     <FormControl>
                       <Input
                         type="password"
-                        placeholder={t('confirmPasswordPlaceholder')}
+                        placeholder="请再次输入您的密码"
                         disabled={isPending}
                         {...field}
                       />
@@ -381,7 +379,7 @@ export function AuthDialog({ open, onOpenChange }: LoginDialogProps) {
                 className="w-full"
                 disabled={isPending}
               >
-                {isPending ? t('registering') : t('register')}
+                {isPending ? "注册中..." : "注册"}
               </Button>
             </form>
           </Form>
@@ -390,14 +388,14 @@ export function AuthDialog({ open, onOpenChange }: LoginDialogProps) {
         {/* 切换登录/注册链接 */}
         <div className="text-center">
           <p className="text-sm text-muted-foreground">
-            {currentIsLoginMode ? t('noAccount') : t('hasAccount')}{" "}
+            {currentIsLoginMode ? "还没有账号？" : "已有账号？"}{" "}
             <Button
               variant="link"
               className="p-0 h-auto text-sm"
               onClick={toggleMode}
               type="button"
             >
-              {currentIsLoginMode ? t('registerNow') : t('loginNow')}
+              {currentIsLoginMode ? "立即注册" : "立即登录"}
             </Button>
           </p>
         </div>

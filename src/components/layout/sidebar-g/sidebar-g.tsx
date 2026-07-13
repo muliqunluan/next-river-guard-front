@@ -2,7 +2,6 @@
 
 import { useState, useEffect } from "react"
 import Link from "next/link"
-import { useLocale, useTranslations } from 'next-intl';
 import {
     Sidebar,
     SidebarContent,
@@ -18,7 +17,6 @@ import { User, LogIn, LogOut, Shield } from "lucide-react"
 import { AuthDialog } from "@/components/pages/login/login"
 import { Button } from "@/components/ui/button"
 import useUserStore from "@/lib/stores/useUserStore"
-import LanguageSwitcher from "@/components/layout/language-switcher/language-switcher"
 
 /** 检查用户是否有 admin 角色 */
 function hasAdminRole(user: { roles?: string[] } | null): boolean {
@@ -28,8 +26,6 @@ function hasAdminRole(user: { roles?: string[] } | null): boolean {
 
 const SidebarG = () => {
     const [isLoginOpen, setIsLoginOpen] = useState(false)
-    const locale = useLocale()
-    const t = useTranslations('sidebar')
 
     const { isAuthenticated, isLoading, loadUser, signOut, user } = useUserStore()
 
@@ -55,25 +51,24 @@ const SidebarG = () => {
                 </SidebarRail>
                 <SidebarGroup>
                     <div className="flex items-center justify-between px-2">
-                        <SidebarGroupLabel>{t('title')}</SidebarGroupLabel>
-                        <LanguageSwitcher />
+                        <SidebarGroupLabel>导航菜单</SidebarGroupLabel>
                     </div>
                     <SidebarGroupContent>
                         <SidebarMenu>
                             <SidebarMenuItem>
                                 <SidebarMenuButton asChild>
-                                    <Link href={`/${locale}/user`}>
+                                    <Link href="/user">
                                         <User />
-                                        <span>{t('user')}</span>
+                                        <span>用户</span>
                                     </Link>
                                 </SidebarMenuButton>
                             </SidebarMenuItem>
                             {hasAdminRole(user) && (
                                 <SidebarMenuItem>
                                     <SidebarMenuButton asChild>
-                                        <Link href={`/${locale}/admin`}>
+                                        <Link href="/admin">
                                             <Shield />
-                                            <span>{t('admin')}</span>
+                                            <span>管理员</span>
                                         </Link>
                                     </SidebarMenuButton>
                                 </SidebarMenuItem>
@@ -88,7 +83,7 @@ const SidebarG = () => {
                                             disabled={isLoading}
                                         >
                                             <LogOut />
-                                            <span>{t('logout')}</span>
+                                            <span>登出</span>
                                         </Button>
                                     </SidebarMenuButton>
                                 ) : (
@@ -100,7 +95,7 @@ const SidebarG = () => {
                                             disabled={isLoading}
                                         >
                                             <LogIn />
-                                            <span>{t('login')}</span>
+                                            <span>登录</span>
                                         </Button>
                                     </SidebarMenuButton>
                                 )}

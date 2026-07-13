@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useLocale, useTranslations } from "next-intl";
 import { AlertCircle } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
@@ -12,8 +11,6 @@ import useUserStore from "@/lib/stores/useUserStore";
 export function AuthRequiredAlert() {
   const searchParams = useSearchParams();
   const router = useRouter();
-  const locale = useLocale();
-  const t = useTranslations('auth');
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const { isAuthenticated } = useUserStore();
 
@@ -43,16 +40,16 @@ export function AuthRequiredAlert() {
     <>
       <Alert variant="destructive" className="mb-4">
         <AlertCircle className="h-4 w-4" />
-        <AlertTitle>{t('authRequired.title')}</AlertTitle>
+        <AlertTitle>需要登录</AlertTitle>
         <AlertDescription className="mt-2">
           <div className="flex flex-col gap-3">
-            <p>{t('authRequired.description')}</p>
+            <p>该页面需要登录后才能访问，请先登录。</p>
             <Button
               variant="outline"
               size="sm"
               onClick={() => setIsDialogOpen(true)}
             >
-              {t('login')}
+              登录
             </Button>
           </div>
         </AlertDescription>
