@@ -13,6 +13,8 @@ export const publicRoutes = [
 export const protectedRoutes = [
   '/my-maps', // 我的地图
   '/user', // 用户信息
+  '/monitor', // 监控总览
+  '/data', // 数据管理
   '/publish-map', // 发布地图
   '/admin', // 管理员页面
 ];

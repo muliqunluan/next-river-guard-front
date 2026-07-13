@@ -13,7 +13,7 @@ import {
     SidebarMenuItem,
     SidebarRail,
 } from "@/components/ui/sidebar"
-import { User, LogIn, LogOut, Shield } from "lucide-react"
+import { User, LogIn, LogOut, Shield, MapPin, Database } from "lucide-react"
 import { AuthDialog } from "@/components/pages/login/login"
 import { Button } from "@/components/ui/button"
 import useUserStore from "@/lib/stores/useUserStore"
@@ -63,15 +63,33 @@ const SidebarG = () => {
                                     </Link>
                                 </SidebarMenuButton>
                             </SidebarMenuItem>
+                            <SidebarMenuItem>
+                                <SidebarMenuButton asChild>
+                                    <Link href="/monitor">
+                                        <MapPin />
+                                        <span>监控总览</span>
+                                    </Link>
+                                </SidebarMenuButton>
+                            </SidebarMenuItem>
                             {hasAdminRole(user) && (
-                                <SidebarMenuItem>
-                                    <SidebarMenuButton asChild>
-                                        <Link href="/admin">
-                                            <Shield />
-                                            <span>管理员</span>
-                                        </Link>
-                                    </SidebarMenuButton>
-                                </SidebarMenuItem>
+                                <>
+                                    <SidebarMenuItem>
+                                        <SidebarMenuButton asChild>
+                                            <Link href="/data">
+                                                <Database />
+                                                <span>数据管理</span>
+                                            </Link>
+                                        </SidebarMenuButton>
+                                    </SidebarMenuItem>
+                                    <SidebarMenuItem>
+                                        <SidebarMenuButton asChild>
+                                            <Link href="/admin">
+                                                <Shield />
+                                                <span>管理员</span>
+                                            </Link>
+                                        </SidebarMenuButton>
+                                    </SidebarMenuItem>
+                                </>
                             )}
                             <SidebarMenuItem>
                                 {isAuthenticated ? (
