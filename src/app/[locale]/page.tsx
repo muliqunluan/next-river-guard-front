@@ -1,14 +1,15 @@
 "use client";
 
+import { useEffect } from "react";
 import { AuthRequiredAlert } from "@/components/auth/auth-required-alert";
 import { useRouter } from "next/navigation";
-import { useLocale, useTranslations } from "next-intl";
 import {
-    User, ArrowRight, LogIn, Shield, Compass, Lock
+    User, ArrowRight, LogIn, Shield, Lock
 } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Skeleton } from "@/components/ui/skeleton";
 import useUserStore from "@/lib/stores/useUserStore";
 
 interface LocalePageProps {
@@ -17,12 +18,35 @@ interface LocalePageProps {
 
 export default function LocalePage({ params }: LocalePageProps) {
     const router = useRouter();
-    const locale = useLocale();
-    const t = useTranslations('common');
-    const tHome = useTranslations('home');
-    const { isAuthenticated } = useUserStore();
+    const { isAuthenticated, isLoading, loadUser } = useUserStore();
 
-    const handleNavigate = (link: string) => router.push(link);
+    // 页面加载时主动检查用户登录状态
+    useEffect(() => {
+        loadUser();
+    }, [loadUser]);
+
+    const handleNavigate = async (link: string) => {
+        const { locale } = await params;
+        router.push(`/${locale}${link}`);
+    };
+
+    // 加载中显示骨架屏
+    if (isLoading) {
+        return (
+            <div className="flex-1 flex flex-col min-h-screen p-8">
+                <div className="max-w-6xl mx-auto w-full space-y-8">
+                    <div className="flex flex-col items-center text-center gap-6">
+                        <Skeleton className="h-12 w-48" />
+                        <Skeleton className="h-6 w-96" />
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-3xl mx-auto mt-16">
+                        <Skeleton className="h-48 rounded-xl" />
+                        <Skeleton className="h-48 rounded-xl" />
+                    </div>
+                </div>
+            </div>
+        );
+    }
 
     return (
         <div className="flex-1 flex flex-col min-h-screen">
@@ -36,19 +60,14 @@ export default function LocalePage({ params }: LocalePageProps) {
 
                 <div className="relative max-w-6xl mx-auto px-8 py-20 md:py-28">
                     <div className="flex flex-col items-center text-center gap-6">
-                        <div className="inline-flex items-center gap-2 px-4 py-1.5 bg-primary/10 rounded-full text-sm text-primary font-medium">
-                            <Compass className="w-4 h-4" />
-                            <span>{t('appName')}</span>
-                        </div>
-
                         <h1 className="text-4xl md:text-6xl font-bold tracking-tight">
                             <span className="bg-linear-to-r from-primary via-primary/80 to-blue-600 bg-clip-text text-transparent">
-                                {t('appName')}
+                                River Guard
                             </span>
                         </h1>
 
                         <p className="text-xl md:text-2xl text-muted-foreground max-w-2xl leading-relaxed">
-                            {t('appDescription')}
+                            基于 NestJS 和 Next.js 的全栈服务平台
                         </p>
                     </div>
                 </div>
@@ -57,17 +76,11 @@ export default function LocalePage({ params }: LocalePageProps) {
             {/* ─── Features Section ─── */}
             <section className="py-16 md:py-20">
                 <div className="max-w-6xl mx-auto px-8">
-                    <div className="text-center mb-12">
-                        <h2 className="text-3xl font-bold mb-4">{tHome('sections.protected.title')}</h2>
-                        <p className="text-muted-foreground max-w-xl mx-auto">
-                            {tHome('sections.protected.desc')}
-                        </p>
-                    </div>
 
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-3xl mx-auto">
                         <Card
                             className="group cursor-pointer hover:shadow-lg transition-all duration-300 hover:-translate-y-1"
-                            onClick={() => handleNavigate(`/${locale}/user`)}
+                            onClick={() => handleNavigate("/user")}
                         >
                             <CardHeader>
                                 <div className="flex items-center gap-3">
@@ -75,19 +88,19 @@ export default function LocalePage({ params }: LocalePageProps) {
                                         <User className="h-5 w-5" />
                                     </div>
                                     <div className="flex-1">
-                                        <CardTitle className="text-lg">{tHome('features.user.title')}</CardTitle>
+                                        <CardTitle className="text-lg">用户信息</CardTitle>
                                     </div>
                                     <Badge variant="secondary" className="shrink-0">
-                                        {tHome('badgeLogin')}
+                                        登录
                                     </Badge>
                                 </div>
                                 <CardDescription className="mt-2 leading-relaxed">
-                                    {tHome('features.user.desc')}
+                                    管理您的个人信息和账号设置
                                 </CardDescription>
                             </CardHeader>
                             <CardContent>
                                 <Button variant="ghost" className="gap-2 group-hover:gap-3 transition-all p-0 h-auto text-primary">
-                                    {tHome('learnMore')}
+                                    了解更多
                                     <ArrowRight className="w-4 h-4 transition-transform group-hover:translate-x-1" />
                                 </Button>
                             </CardContent>
@@ -96,7 +109,7 @@ export default function LocalePage({ params }: LocalePageProps) {
                         {isAuthenticated && (
                             <Card
                                 className="group cursor-pointer hover:shadow-lg transition-all duration-300 hover:-translate-y-1"
-                                onClick={() => handleNavigate(`/${locale}/admin`)}
+                                onClick={() => handleNavigate("/admin")}
                             >
                                 <CardHeader>
                                     <div className="flex items-center gap-3">
@@ -104,19 +117,19 @@ export default function LocalePage({ params }: LocalePageProps) {
                                             <Shield className="h-5 w-5" />
                                         </div>
                                         <div className="flex-1">
-                                            <CardTitle className="text-lg">{tHome('features.admin.title')}</CardTitle>
+                                            <CardTitle className="text-lg">管理员面板</CardTitle>
                                         </div>
                                         <Badge variant="secondary" className="shrink-0">
                                             Admin
                                         </Badge>
                                     </div>
                                     <CardDescription className="mt-2 leading-relaxed">
-                                        {tHome('features.admin.desc')}
+                                        管理系统角色和用户权限分配
                                     </CardDescription>
                                 </CardHeader>
                                 <CardContent>
                                     <Button variant="ghost" className="gap-2 group-hover:gap-3 transition-all p-0 h-auto text-primary">
-                                        {tHome('learnMore')}
+                                        了解更多
                                         <ArrowRight className="w-4 h-4 transition-transform group-hover:translate-x-1" />
                                     </Button>
                                 </CardContent>
@@ -126,7 +139,7 @@ export default function LocalePage({ params }: LocalePageProps) {
                         {!isAuthenticated && (
                             <Card
                                 className="group cursor-pointer opacity-75 hover:shadow-lg transition-all duration-300 hover:-translate-y-1"
-                                onClick={() => {/* 无需操作 */}}
+                                onClick={() => {}}
                             >
                                 <CardHeader>
                                     <div className="flex items-center gap-3">
@@ -134,21 +147,21 @@ export default function LocalePage({ params }: LocalePageProps) {
                                             <Shield className="h-5 w-5" />
                                         </div>
                                         <div className="flex-1">
-                                            <CardTitle className="text-lg">{tHome('features.admin.title')}</CardTitle>
+                                            <CardTitle className="text-lg">管理员面板</CardTitle>
                                         </div>
                                         <Badge variant="outline" className="shrink-0 text-muted-foreground">
                                             <LogIn className="w-3 h-3 mr-1" />
-                                            {tHome('badgeLogin')}
+                                            登录
                                         </Badge>
                                     </div>
                                     <CardDescription className="mt-2 leading-relaxed">
-                                        {tHome('features.admin.desc')}
+                                        管理系统角色和用户权限分配
                                     </CardDescription>
                                 </CardHeader>
                                 <CardContent>
                                     <Button variant="ghost" className="gap-2 p-0 h-auto text-muted-foreground cursor-not-allowed" disabled>
                                         <Lock className="w-3 h-3" />
-                                        {tHome('loginRequired')}
+                                        需要登录
                                     </Button>
                                 </CardContent>
                             </Card>

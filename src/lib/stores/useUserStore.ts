@@ -20,32 +20,26 @@ const useUserStore = create<UserState>((set, get) => ({
   isLoading: false,
   
   loadUser: async () => {
-    const { isAuthenticated } = get();
-    
-    // 如果没有 token，直接返回 false
-    if (!isAuthenticated) {
-      return false;
-    }
-    
-    try {
-      set({ isLoading: true });
-      const user = await retrieveUser();
-      
-      if (!user) {
-        // token 可能已过期
-        set({ user: null, isAuthenticated: false });
-        return false;
-      }
-
-      set({ user, isAuthenticated: true });
-      return true;
-    } catch (error) {
-      console.error("加载用户信息失败:", error);
+    // 直接检查 cookie 中是否有 token，不依赖 state（避免时序问题）
+    const token = getAuthCookie();
+    if (!token) {
       set({ user: null, isAuthenticated: false });
       return false;
-    } finally {
-      set({ isLoading: false });
     }
+    
+    set({ isLoading: true });
+    
+    // 尝试用 token 从后端获取用户信息
+    const user = await retrieveUser();
+    
+    if (!user) {
+      // token 无效或后端不可达，清除登录状态
+      set({ user: null, isAuthenticated: false, isLoading: false });
+      return false;
+    }
+
+    set({ user, isAuthenticated: true, isLoading: false });
+    return true;
   },
 
   signIn: async (credentials: LoginParams) => {

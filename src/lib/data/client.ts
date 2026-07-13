@@ -69,8 +69,7 @@ async function apiClient<T = any>(
       ok: response.ok,
     };
   } catch (error) {
-    // 处理网络错误等
-    console.error('API请求错误:', error);
+    // 网络错误（后端未启动、断网等）属于预期内场景，不需要在控制台打印
     return {
       error: error instanceof Error ? error.message : '网络连接失败，请检查网络设置',
       status: 0,
