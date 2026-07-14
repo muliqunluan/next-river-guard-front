@@ -57,3 +57,25 @@ export interface RemoveRoleFromUserParams {
     email: string;
     roleName: string;
 }
+
+// ===== 摄像头相关类型 =====
+
+export interface Camera {
+    id: number;
+    deviceId: string;
+    lat: number | null;
+    lng: number | null;
+    status: 'online' | 'offline';
+    lastSeenAt: string | null;
+    createdAt: string;
+}
+
+export interface RegisterCameraResponse {
+    accessToken: string;
+}
+
+export interface UpdateCameraStatusParams {
+    lat: number;
+    lng: number;
+    status: 'online' | 'offline';
+}

@@ -13,7 +13,7 @@ import {
     SidebarMenuItem,
     SidebarRail,
 } from "@/components/ui/sidebar"
-import { User, LogIn, LogOut, Shield, MapPin, Database } from "lucide-react"
+import { User, LogIn, LogOut, Shield, MapPin, Database, Cpu } from "lucide-react"
 import { AuthDialog } from "@/components/pages/login/login"
 import { Button } from "@/components/ui/button"
 import useUserStore from "@/lib/stores/useUserStore"
@@ -86,6 +86,14 @@ const SidebarG = () => {
                                             <Link href="/admin">
                                                 <Shield />
                                                 <span>管理员</span>
+                                            </Link>
+                                        </SidebarMenuButton>
+                                    </SidebarMenuItem>
+                                    <SidebarMenuItem>
+                                        <SidebarMenuButton asChild>
+                                            <Link href="/admin/jetson-simulator">
+                                                <Cpu />
+                                                <span>Jetson 模拟器</span>
                                             </Link>
                                         </SidebarMenuButton>
                                     </SidebarMenuItem>

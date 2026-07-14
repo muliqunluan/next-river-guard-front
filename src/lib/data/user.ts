@@ -24,25 +24,37 @@ export const login = async (formdata: LoginParams) => {
   try {
     const response = await client.post<AuthResponse>('/auth/login', formdata);
     
+    if (!response.ok) {
+      // 根据状态码区分错误类型
+      if (response.status === 0) {
+        // 网络错误（后端未启动、断网等）
+        throw new Error(response.error || '网络连接失败，请检查后端服务是否已启动');
+      }
+      if (response.status === 401) {
+        throw new Error('邮箱或密码错误');
+      }
+      // 其他服务器错误
+      throw new Error(response.error || '登录失败，请稍后重试');
+    }
+    
     // 处理嵌套的响应结构
     const responseData = response.data as any;
     const accessToken = responseData?.data?.access_token || responseData?.access_token;
     
-    if (response.ok && accessToken) {
+    if (accessToken) {
       // 保存 token 到 cookie
       setAuthCookie(accessToken);
-      
       return responseData.data || responseData;
     } else {
-      throw new Error('密码错误')
+      throw new Error('登录响应异常，未获取到访问令牌');
     }
   } catch (error) {
     console.error('登录请求异常：', error);
-    // 确保网络错误也能显示友好的错误信息
+    // 确保所有错误都被正确抛出
     if (error instanceof Error) {
       throw error;
     } else {
-      throw new Error('网络连接失败，请检查网络设置');
+      throw new Error('登录失败，请稍后重试');
     }
   }
 };
