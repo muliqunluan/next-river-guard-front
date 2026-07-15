@@ -81,6 +81,7 @@ export default function JetsonSimulatorPage() {
   const [uploadEventId, setUploadEventId] = useState("")
   const [isUploading, setIsUploading] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const [lastEventId, setLastEventId] = useState<number | null>(null)
 
   // ===== 从引擎同步的状态（当前激活设备的自动上报状态） =====
   const [engineRunning, setEngineRunning] = useState(false)
@@ -282,6 +283,9 @@ export default function JetsonSimulatorPage() {
       })
       toast.success(`事件上报成功 (ID: ${result.id}, 类型: ${eventType})`)
       setLastEventResult(`${eventType} 已上报 (ID: ${result.id})`)
+      // 自动填充关联事件 ID 到媒体上传表单
+      setLastEventId(result.id)
+      setUploadEventId(String(result.id))
     } catch (err: any) {
       toast.error(err.message || "事件上报失败")
     } finally {
@@ -819,14 +823,39 @@ export default function JetsonSimulatorPage() {
 
                   {/* 关联事件 ID（可选） */}
                   <div className="space-y-2">
-                    <Label htmlFor="upload-event-id">关联事件 ID（可选）</Label>
-                    <Input
-                      id="upload-event-id"
-                      type="number"
-                      placeholder="留空则不关联事件"
-                      value={uploadEventId}
-                      onChange={(e) => setUploadEventId(e.target.value)}
-                    />
+                    <Label htmlFor="upload-event-id">
+                      关联事件 ID
+                      {lastEventId != null && (
+                        <span className="text-xs text-muted-foreground font-normal ml-2">
+                          ← 上次事件 #{lastEventId}
+                        </span>
+                      )}
+                    </Label>
+                    <div className="flex gap-2">
+                      <Input
+                        id="upload-event-id"
+                        type="number"
+                        placeholder="留空则不关联事件"
+                        value={uploadEventId}
+                        onChange={(e) => setUploadEventId(e.target.value)}
+                      />
+                      {lastEventId != null && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="shrink-0"
+                          onClick={() => setUploadEventId(String(lastEventId))}
+                          type="button"
+                        >
+                          填充
+                        </Button>
+                      )}
+                    </div>
+                    {lastEventId != null && (
+                      <p className="text-xs text-muted-foreground">
+                        提示：上报事件后自动填充事件 ID，便于演示事件→媒体关联流程
+                      </p>
+                    )}
                   </div>
 
                   <Button

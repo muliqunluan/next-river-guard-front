@@ -37,11 +37,11 @@ export const fetchMediaFiles = async (
 
 /**
  * 获取媒体文件 URL（用于 <img> 或 <video> 标签直接引用）
+ * 通过 Next.js API 代理路由获取，自动携带 JWT 认证
  * @param id 媒体文件 ID
  */
 export const getMediaFileUrl = (id: number): string => {
-  // 返回相对路径，前端需拼接后端地址
-  return `/media/${id}/file`;
+  return `/api/media/${id}/file`;
 };
 
 /**
