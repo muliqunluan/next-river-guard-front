@@ -79,3 +79,54 @@ export interface UpdateCameraStatusParams {
     lng: number;
     status: 'online' | 'offline';
 }
+
+// ===== 事件系统类型 =====
+
+export interface EventItem {
+    id: number;
+    cameraId: number;
+    type: string;
+    severity: 'info' | 'warning' | 'critical';
+    status: 'pending' | 'acknowledged' | 'resolved';
+    description: string | null;
+    metadata: Record<string, any> | null;
+    occurredAt: string;
+    createdAt: string;
+    updatedAt: string;
+    mediaFiles?: MediaFile[];
+}
+
+export interface CreateEventParams {
+    type: string;
+    severity: 'info' | 'warning' | 'critical';
+    description?: string;
+    metadata?: Record<string, any>;
+    occurredAt: string;
+}
+
+export interface UpdateEventParams {
+    status?: 'pending' | 'acknowledged' | 'resolved';
+    severity?: 'info' | 'warning' | 'critical';
+    description?: string;
+}
+
+export interface MediaFile {
+    id: number;
+    cameraId: number;
+    eventId: number | null;
+    mediaType: 'image' | 'video';
+    filePath: string;
+    originalName: string;
+    mimeType: string;
+    fileSize: number;
+    capturedAt: string;
+    createdAt: string;
+}
+
+export interface PaginatedResponse<T> {
+    items: T[];
+    total: number;
+    page: number;
+    limit: number;
+    totalPages: number;
+}

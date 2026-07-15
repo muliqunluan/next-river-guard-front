@@ -3,11 +3,18 @@
 import { useState, useEffect, useCallback, useRef } from "react"
 import useUserStore from "@/lib/stores/useUserStore"
 import { registerCamera, updateCameraStatus, deleteCamera, fetchCameras } from "@/lib/data/cameras"
+import { createEvent } from "@/lib/data/events"
+import { uploadMedia } from "@/lib/data/media"
+import config from "@/lib/data/config"
 import { startEngine, stopEngine, subscribeEngine } from "@/lib/data/simulator-engine"
 import type { SimulatorStatus } from "@/lib/data/simulator-engine"
 import type { Camera as CameraType } from "@/lib/types/types"
 import { toast } from "sonner"
-import { Cpu, Loader2, Wifi, WifiOff, Trash2, RefreshCw, Play, Square, Plus, ArrowRight } from "lucide-react"
+import {
+  Cpu, Loader2, Wifi, WifiOff, Trash2, RefreshCw,
+  Play, Square, Plus, AlertTriangle, Camera, Upload,
+  Image, Video, Send
+} from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 import {
@@ -21,6 +28,14 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Badge } from "@/components/ui/badge"
 import { Separator } from "@/components/ui/separator"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
+import { Textarea } from "@/components/ui/textarea"
 import { Shield } from "lucide-react"
 
 /** 检查当前用户是否拥有 admin 角色 */
@@ -28,6 +43,13 @@ function isAdmin(user: { roles?: string[] } | null): boolean {
   if (!user?.roles) return false
   return user.roles.includes("admin")
 }
+
+/** 模拟事件类型选项 */
+const EVENT_TYPE_OPTIONS = [
+  { value: 'garbage_detected', label: '垃圾检测 (garbage_detected)' },
+  { value: 'video_triggered', label: '视频触发 (video_triggered)' },
+  { value: 'system_alert', label: '系统告警 (system_alert)' },
+]
 
 export default function JetsonSimulatorPage() {
   const { user, isAuthenticated, isLoading: userLoading, loadUser } = useUserStore()
@@ -46,11 +68,27 @@ export default function JetsonSimulatorPage() {
   const [controlIsOnline, setControlIsOnline] = useState(true)
   const [isUpdating, setIsUpdating] = useState(false)
 
+  // ===== 事件上报表单 =====
+  const [eventType, setEventType] = useState("garbage_detected")
+  const [eventSeverity, setEventSeverity] = useState("warning")
+  const [eventDescription, setEventDescription] = useState("")
+  const [eventMetadata, setEventMetadata] = useState('{\n  "confidence": 0.85,\n  "garbageType": "plastic"\n}')
+  const [isReportingEvent, setIsReportingEvent] = useState(false)
+
+  // ===== 媒体上传表单 =====
+  const [uploadFile, setUploadFile] = useState<File | null>(null)
+  const [uploadMediaType, setUploadMediaType] = useState("image")
+  const [uploadEventId, setUploadEventId] = useState("")
+  const [isUploading, setIsUploading] = useState(false)
+  const fileInputRef = useRef<HTMLInputElement>(null)
+
   // ===== 从引擎同步的状态（当前激活设备的自动上报状态） =====
   const [engineRunning, setEngineRunning] = useState(false)
   const [engineLat, setEngineLat] = useState("")
   const [engineLng, setEngineLng] = useState("")
   const [engineError, setEngineError] = useState<string | null>(null)
+  const [engineAutoEvent, setEngineAutoEvent] = useState(false)
+  const [lastEventResult, setLastEventResult] = useState<string | null>(null)
   const engineUnsubRef = useRef<(() => void) | null>(null)
 
   // 当 activeDeviceId 变化时，重新订阅引擎
@@ -66,6 +104,8 @@ export default function JetsonSimulatorPage() {
     setEngineLat("")
     setEngineLng("")
     setEngineError(null)
+    setEngineAutoEvent(false)
+    setLastEventResult(null)
 
     if (activeDeviceId) {
       engineUnsubRef.current = subscribeEngine(activeDeviceId, (status: SimulatorStatus) => {
@@ -75,6 +115,9 @@ export default function JetsonSimulatorPage() {
           setEngineLng(status.lng.toFixed(7))
         }
         setEngineError(status.error)
+        if (status.lastEventResult) {
+          setLastEventResult(status.lastEventResult)
+        }
       })
     }
 
@@ -208,6 +251,85 @@ export default function JetsonSimulatorPage() {
     }
   }
 
+  // ===== 手动上报事件 =====
+  const handleReportEvent = async () => {
+    if (!activeDeviceId) return
+
+    const auth = getDeviceAuth(activeDeviceId)
+    if (!auth) {
+      toast.error("该设备未注册或认证信息丢失")
+      return
+    }
+
+    let parsedMetadata: Record<string, any> | undefined
+    if (eventMetadata.trim()) {
+      try {
+        parsedMetadata = JSON.parse(eventMetadata)
+      } catch {
+        toast.error("metadata JSON 格式错误")
+        return
+      }
+    }
+
+    setIsReportingEvent(true)
+    try {
+      const result = await createEvent(auth.accessToken, {
+        type: eventType,
+        severity: eventSeverity as any,
+        description: eventDescription || undefined,
+        metadata: parsedMetadata,
+        occurredAt: new Date().toISOString(),
+      })
+      toast.success(`事件上报成功 (ID: ${result.id}, 类型: ${eventType})`)
+      setLastEventResult(`${eventType} 已上报 (ID: ${result.id})`)
+    } catch (err: any) {
+      toast.error(err.message || "事件上报失败")
+    } finally {
+      setIsReportingEvent(false)
+    }
+  }
+
+  // ===== 上传媒体文件 =====
+  const handleUploadMedia = async () => {
+    if (!activeDeviceId) return
+    if (!uploadFile) {
+      toast.error("请选择文件")
+      return
+    }
+
+    const auth = getDeviceAuth(activeDeviceId)
+    if (!auth) {
+      toast.error("该设备未注册或认证信息丢失")
+      return
+    }
+
+    const formData = new FormData()
+    formData.append('file', uploadFile)
+    formData.append('mediaType', uploadMediaType)
+    if (uploadEventId.trim()) {
+      formData.append('eventId', uploadEventId.trim())
+    }
+    formData.append('capturedAt', new Date().toISOString())
+
+    setIsUploading(true)
+    try {
+      const result = await uploadMedia(
+        auth.accessToken,
+        config.backendUrl,
+        formData,
+      )
+      toast.success(`文件上传成功 (ID: ${result.id}, 类型: ${result.mediaType})`)
+      setUploadFile(null)
+      if (fileInputRef.current) {
+        fileInputRef.current.value = ''
+      }
+    } catch (err: any) {
+      toast.error(err.message || "文件上传失败")
+    } finally {
+      setIsUploading(false)
+    }
+  }
+
   // ===== 自动上报切换 =====
   const toggleAutoReport = () => {
     if (!activeDeviceId) return
@@ -248,8 +370,9 @@ export default function JetsonSimulatorPage() {
         accessToken: auth.accessToken,
         lat: latNum,
         lng: lngNum,
+        autoEvent: engineAutoEvent,
       })
-      toast.success(`${activeDeviceId} 自动上报已启动（每10秒）`)
+      toast.success(`${activeDeviceId} 自动上报已启动（每10秒）${engineAutoEvent ? '· 含事件模拟' : ''}`)
     }
   }
 
@@ -373,7 +496,7 @@ export default function JetsonSimulatorPage() {
         <Cpu className="h-8 w-8 text-primary" />
         <div>
           <h1 className="text-2xl font-bold">Jetson 模拟器</h1>
-          <p className="text-sm text-muted-foreground">模拟 Jetson 设备与服务器通信</p>
+          <p className="text-sm text-muted-foreground">模拟 Jetson 设备与服务器通信（状态、事件、媒体）</p>
         </div>
         <div className="ml-auto flex items-center gap-2">
           {offlineDetected && (
@@ -387,8 +510,8 @@ export default function JetsonSimulatorPage() {
       <Separator />
 
       <div className="grid gap-6 md:grid-cols-[1fr_380px]">
-        {/* ===== 左侧：Jetson 控制面板（注册或控制，取决于激活指针） ===== */}
-        <div>
+        {/* ===== 左侧：Jetson 控制面板 ===== */}
+        <div className="space-y-6">
           {activeDeviceId === null ? (
             /* ===== 注册模式 ===== */
             <Card>
@@ -434,109 +557,293 @@ export default function JetsonSimulatorPage() {
               </CardContent>
             </Card>
           ) : (
-            /* ===== 控制模式 ===== */
-            <Card className={engineRunning ? 'border-green-500/50' : ''}>
-              <CardHeader>
-                <div className="flex items-center gap-2">
-                  {engineRunning ? (
-                    <Wifi className="h-4 w-4 text-green-500" />
-                  ) : (
-                    <WifiOff className="h-4 w-4 text-amber-500" />
-                  )}
-                  <div>
-                    <CardTitle className="text-base">{activeDeviceId}</CardTitle>
-                    <CardDescription>
-                      {engineRunning ? '自动上报中' : '已注册 · 等待操作'}
-                    </CardDescription>
+            <>
+              {/* ===== 控制面板：状态上报 ===== */}
+              <Card className={engineRunning ? 'border-green-500/50' : ''}>
+                <CardHeader>
+                  <div className="flex items-center gap-2">
+                    {engineRunning ? (
+                      <Wifi className="h-4 w-4 text-green-500" />
+                    ) : (
+                      <WifiOff className="h-4 w-4 text-amber-500" />
+                    )}
+                    <div>
+                      <CardTitle className="text-base">{activeDeviceId}</CardTitle>
+                      <CardDescription>
+                        {engineRunning ? '自动上报中' : '已注册 · 等待操作'}
+                      </CardDescription>
+                    </div>
                   </div>
-                </div>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                {/* 坐标输入 */}
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="space-y-2">
-                    <Label htmlFor="ctrl-lat">纬度 (lat)</Label>
-                    <Input
-                      id="ctrl-lat"
-                      placeholder="41.3023456"
-                      value={engineRunning ? engineLat : controlLat}
-                      onChange={(e) => setControlLat(e.target.value)}
-                      disabled={isUpdating || engineRunning}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="ctrl-lng">经度 (lng)</Label>
-                    <Input
-                      id="ctrl-lng"
-                      placeholder="113.9845678"
-                      value={engineRunning ? engineLng : controlLng}
-                      onChange={(e) => setControlLng(e.target.value)}
-                      disabled={isUpdating || engineRunning}
-                    />
-                  </div>
-                </div>
-
-                {/* 在线/离线开关 */}
-                <div className="flex items-center gap-2">
-                  <Label className="cursor-pointer flex items-center gap-2">
-                    <button
-                      className={`w-10 h-6 rounded-full transition-colors relative ${
-                        controlIsOnline ? 'bg-green-500' : 'bg-gray-300'
-                      }`}
-                      onClick={() => setControlIsOnline(!controlIsOnline)}
-                      disabled={engineRunning}
-                      type="button"
-                    >
-                      <span
-                        className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white transition-transform ${
-                          controlIsOnline ? 'translate-x-4' : 'translate-x-0'
-                        }`}
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  {/* 坐标输入 */}
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-2">
+                      <Label htmlFor="ctrl-lat">纬度 (lat)</Label>
+                      <Input
+                        id="ctrl-lat"
+                        placeholder="41.3023456"
+                        value={engineRunning ? engineLat : controlLat}
+                        onChange={(e) => setControlLat(e.target.value)}
+                        disabled={isUpdating || engineRunning}
                       />
-                    </button>
-                    <span className="text-sm">{controlIsOnline ? '在线 (online)' : '离线 (offline)'}</span>
-                  </Label>
-                </div>
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="ctrl-lng">经度 (lng)</Label>
+                      <Input
+                        id="ctrl-lng"
+                        placeholder="113.9845678"
+                        value={engineRunning ? engineLng : controlLng}
+                        onChange={(e) => setControlLng(e.target.value)}
+                        disabled={isUpdating || engineRunning}
+                      />
+                    </div>
+                  </div>
 
-                {/* 操作按钮 */}
-                <div className="flex gap-2">
+                  {/* 在线/离线开关 */}
+                  <div className="flex items-center gap-2">
+                    <Label className="cursor-pointer flex items-center gap-2">
+                      <button
+                        className={`w-10 h-6 rounded-full transition-colors relative ${
+                          controlIsOnline ? 'bg-green-500' : 'bg-gray-300'
+                        }`}
+                        onClick={() => setControlIsOnline(!controlIsOnline)}
+                        disabled={engineRunning}
+                        type="button"
+                      >
+                        <span
+                          className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white transition-transform ${
+                            controlIsOnline ? 'translate-x-4' : 'translate-x-0'
+                          }`}
+                        />
+                      </button>
+                      <span className="text-sm">{controlIsOnline ? '在线 (online)' : '离线 (offline)'}</span>
+                    </Label>
+                  </div>
+
+                  {/* 操作按钮 */}
+                  <div className="flex gap-2">
+                    <Button
+                      onClick={handleUpdateStatus}
+                      disabled={isUpdating || engineRunning}
+                      className="flex-1"
+                      variant="outline"
+                    >
+                      {isUpdating ? (
+                        <><Loader2 className="h-4 w-4 mr-2 animate-spin" />上报中...</>
+                      ) : (
+                        <><Wifi className="h-4 w-4 mr-2" />手动上报</>
+                      )}
+                    </Button>
+                    <Button
+                      onClick={toggleAutoReport}
+                      disabled={!isRegistered}
+                      variant={engineRunning ? "destructive" : "default"}
+                    >
+                      {engineRunning ? (
+                        <><Square className="h-4 w-4 mr-2" />停止</>
+                      ) : (
+                        <><Play className="h-4 w-4 mr-2" />自动</>
+                      )}
+                    </Button>
+                  </div>
+
+                  {/* 自动事件模拟开关 */}
+                  {engineRunning && (
+                    <div className="flex items-center gap-2">
+                      <Label className="cursor-pointer flex items-center gap-2">
+                        <button
+                          className={`w-10 h-6 rounded-full transition-colors relative ${
+                            engineAutoEvent ? 'bg-purple-500' : 'bg-gray-300'
+                          }`}
+                          onClick={() => setEngineAutoEvent(!engineAutoEvent)}
+                          type="button"
+                        >
+                          <span
+                            className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white transition-transform ${
+                              engineAutoEvent ? 'translate-x-4' : 'translate-x-0'
+                            }`}
+                          />
+                        </button>
+                        <span className="text-sm">自动模拟事件上报</span>
+                      </Label>
+                    </div>
+                  )}
+
+                  {/* 引擎状态提示 */}
+                  {engineRunning && (
+                    <div className="text-center">
+                      <p className="text-xs text-muted-foreground">
+                        每 10 秒自动上报{engineAutoEvent ? '，随机事件（约30%概率）' : ''}
+                      </p>
+                      {engineError && (
+                        <p className="text-xs text-destructive mt-1">⚠️ {engineError}</p>
+                      )}
+                      {lastEventResult && (
+                        <p className="text-xs text-green-600 mt-1">✓ {lastEventResult}</p>
+                      )}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+
+              {/* ===== 事件上报卡片 ===== */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-base flex items-center gap-2">
+                    <AlertTriangle className="h-4 w-4" />
+                    事件上报
+                    <span className="text-xs font-normal text-muted-foreground">POST /api/events</span>
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  {/* 事件类型 */}
+                  <div className="space-y-2">
+                    <Label htmlFor="event-type">事件类型</Label>
+                    <Select value={eventType} onValueChange={setEventType}>
+                      <SelectTrigger id="event-type">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {EVENT_TYPE_OPTIONS.map(opt => (
+                          <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  {/* 严重级别 */}
+                  <div className="space-y-2">
+                    <Label htmlFor="event-severity">严重级别</Label>
+                    <Select value={eventSeverity} onValueChange={setEventSeverity}>
+                      <SelectTrigger id="event-severity">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="info">信息 (info)</SelectItem>
+                        <SelectItem value="warning">警告 (warning)</SelectItem>
+                        <SelectItem value="critical">严重 (critical)</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  {/* 描述 */}
+                  <div className="space-y-2">
+                    <Label htmlFor="event-desc">描述（可选）</Label>
+                    <Input
+                      id="event-desc"
+                      placeholder="例如：检测到塑料瓶漂浮物"
+                      value={eventDescription}
+                      onChange={(e) => setEventDescription(e.target.value)}
+                    />
+                  </div>
+
+                  {/* Metadata JSON */}
+                  <div className="space-y-2">
+                    <Label htmlFor="event-meta">Metadata JSON（可选）</Label>
+                    <Textarea
+                      id="event-meta"
+                      className="font-mono text-xs h-24"
+                      placeholder='{"confidence": 0.85, "garbageType": "plastic"}'
+                      value={eventMetadata}
+                      onChange={(e) => setEventMetadata(e.target.value)}
+                    />
+                  </div>
+
                   <Button
-                    onClick={handleUpdateStatus}
-                    disabled={isUpdating || engineRunning}
-                    className="flex-1"
-                    variant="outline"
+                    onClick={handleReportEvent}
+                    disabled={isReportingEvent || !isRegistered}
+                    className="w-full"
+                    variant="secondary"
                   >
-                    {isUpdating ? (
+                    {isReportingEvent ? (
                       <><Loader2 className="h-4 w-4 mr-2 animate-spin" />上报中...</>
                     ) : (
-                      <><Wifi className="h-4 w-4 mr-2" />手动上报</>
+                      <><Send className="h-4 w-4 mr-2" />POST /api/events</>
                     )}
                   </Button>
-                  <Button
-                    onClick={toggleAutoReport}
-                    disabled={!isRegistered}
-                    variant={engineRunning ? "destructive" : "default"}
-                  >
-                    {engineRunning ? (
-                      <><Square className="h-4 w-4 mr-2" />停止</>
-                    ) : (
-                      <><Play className="h-4 w-4 mr-2" />自动</>
-                    )}
-                  </Button>
-                </div>
+                </CardContent>
+              </Card>
 
-                {/* 引擎状态提示 */}
-                {engineRunning && (
-                  <div className="text-center">
-                    <p className="text-xs text-muted-foreground">
-                      每 10 秒自动上报，离开页面不影响运行
-                    </p>
-                    {engineError && (
-                      <p className="text-xs text-destructive mt-1">⚠️ {engineError}</p>
+              {/* ===== 媒体上传卡片 ===== */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-base flex items-center gap-2">
+                    <Upload className="h-4 w-4" />
+                    媒体上传
+                    <span className="text-xs font-normal text-muted-foreground">POST /api/media/upload</span>
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  {/* 媒体类型 */}
+                  <div className="space-y-2">
+                    <Label htmlFor="upload-media-type">媒体类型</Label>
+                    <Select value={uploadMediaType} onValueChange={setUploadMediaType}>
+                      <SelectTrigger id="upload-media-type">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="image">
+                          <span className="flex items-center gap-2"><Image className="h-3 w-3" />图片 (image)</span>
+                        </SelectItem>
+                        <SelectItem value="video">
+                          <span className="flex items-center gap-2"><Video className="h-3 w-3" />视频 (video)</span>
+                        </SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  {/* 文件选择 */}
+                  <div className="space-y-2">
+                    <Label htmlFor="upload-file">
+                      {uploadMediaType === 'image' ? '选择图片文件' : '选择视频文件'}
+                    </Label>
+                    <Input
+                      id="upload-file"
+                      ref={fileInputRef}
+                      type="file"
+                      accept={uploadMediaType === 'image' ? 'image/*' : 'video/*'}
+                      onChange={(e) => {
+                        const files = e.target.files
+                        if (files && files.length > 0) {
+                          setUploadFile(files[0])
+                        }
+                      }}
+                    />
+                    {uploadFile && (
+                      <p className="text-xs text-muted-foreground">
+                        已选择: {uploadFile.name} ({(uploadFile.size / 1024).toFixed(1)} KB)
+                      </p>
                     )}
                   </div>
-                )}
-              </CardContent>
-            </Card>
+
+                  {/* 关联事件 ID（可选） */}
+                  <div className="space-y-2">
+                    <Label htmlFor="upload-event-id">关联事件 ID（可选）</Label>
+                    <Input
+                      id="upload-event-id"
+                      type="number"
+                      placeholder="留空则不关联事件"
+                      value={uploadEventId}
+                      onChange={(e) => setUploadEventId(e.target.value)}
+                    />
+                  </div>
+
+                  <Button
+                    onClick={handleUploadMedia}
+                    disabled={isUploading || !uploadFile || !isRegistered}
+                    className="w-full"
+                    variant="secondary"
+                  >
+                    {isUploading ? (
+                      <><Loader2 className="h-4 w-4 mr-2 animate-spin" />上传中...</>
+                    ) : (
+                      <><Camera className="h-4 w-4 mr-2" />POST /api/media/upload</>
+                    )}
+                  </Button>
+                </CardContent>
+              </Card>
+            </>
           )}
         </div>
 

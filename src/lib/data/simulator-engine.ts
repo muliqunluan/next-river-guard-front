@@ -6,6 +6,7 @@
  */
 
 import { updateCameraStatus } from "./cameras"
+import { createEvent } from "./events"
 
 // ===== 类型定义 =====
 
@@ -14,6 +15,8 @@ export interface SimulatorConfig {
   accessToken: string
   lat: number
   lng: number
+  /** 是否自动模拟事件上报 */
+  autoEvent?: boolean
 }
 
 export interface SimulatorStatus {
@@ -22,6 +25,10 @@ export interface SimulatorStatus {
   lng: number
   lastReportAt: number | null
   error: string | null
+  /** 最后上报的事件类型 */
+  lastEventType?: string
+  /** 最后上报的事件结果 */
+  lastEventResult?: string
 }
 
 type StatusListener = (status: SimulatorStatus) => void
@@ -40,6 +47,14 @@ const engines = new Map<string, EngineInstance>()
 
 const INTERVAL_MS = 10000
 
+// ===== 模拟事件类型 =====
+const SIM_EVENT_TYPES = [
+  { type: 'garbage_detected', severity: 'warning' as const, label: '垃圾检测' },
+  { type: 'garbage_detected', severity: 'info' as const, label: '垃圾检测（低置信度）' },
+  { type: 'video_triggered', severity: 'info' as const, label: '视频触发录制' },
+  { type: 'system_alert', severity: 'critical' as const, label: '系统异常告警' },
+]
+
 // ===== 内部逻辑 =====
 
 function notifyListeners(engine: EngineInstance) {
@@ -56,7 +71,7 @@ async function doReport(deviceId: string) {
   const engine = engines.get(deviceId)
   if (!engine || !engine.config) return
 
-  const { cameraId, accessToken, lat, lng } = engine.config
+  const { cameraId, accessToken, lat, lng, autoEvent } = engine.config
 
   // 微调坐标模拟移动
   const jitteredLat = lat + (Math.random() - 0.5) * 0.001
@@ -78,6 +93,24 @@ async function doReport(deviceId: string) {
       lng: jitteredLng,
       lastReportAt: Date.now(),
       error: null,
+    }
+
+    // 如果开启了自动事件模拟，随机上报事件
+    if (autoEvent && Math.random() < 0.3) { // 30% 概率上报事件
+      const eventTemplate = SIM_EVENT_TYPES[Math.floor(Math.random() * SIM_EVENT_TYPES.length)]
+      await createEvent(accessToken, {
+        type: eventTemplate.type,
+        severity: eventTemplate.severity,
+        description: `[模拟] ${eventTemplate.label}`,
+        metadata: {
+          simulated: true,
+          confidence: Math.random() * 0.5 + 0.5,
+          garbageType: ['plastic', 'wood', 'foam', 'other'][Math.floor(Math.random() * 4)],
+        },
+        occurredAt: new Date().toISOString(),
+      })
+      engine.status.lastEventType = eventTemplate.type
+      engine.status.lastEventResult = `${eventTemplate.label} 已上报`
     }
   } catch (err: any) {
     engine.status = {
