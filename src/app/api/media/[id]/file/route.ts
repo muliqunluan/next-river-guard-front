@@ -12,7 +12,9 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> },
 ) {
   const { id } = await params;
-  const backendUrl = `http://${process.env.NEXT_PUBLIC_BACKEND_URL}/api/media/${id}/file`;
+  // 服务端运行，直接使用本地地址访问后端；NEXT_PUBLIC_BACKEND_URL 仅用于客户端（config.ts）
+  const backendHost = process.env.NEXT_PUBLIC_BACKEND_URL || '127.0.0.1:7050';
+  const backendUrl = `http://${backendHost}/api/media/${id}/file`;
 
   // 从 cookie 中读取认证 token
   const authToken = request.cookies.get("auth_token")?.value;
