@@ -121,7 +121,7 @@ export function EventsTab() {
         <ListFilter className="h-5 w-5 text-muted-foreground shrink-0" />
 
         <Select value={cameraId} onValueChange={(v) => { setCameraId(v); setPage(1) }}>
-          <SelectTrigger className="w-[160px]">
+          <SelectTrigger className="w-40">
             <SelectValue placeholder="选择摄像头" />
           </SelectTrigger>
           <SelectContent>

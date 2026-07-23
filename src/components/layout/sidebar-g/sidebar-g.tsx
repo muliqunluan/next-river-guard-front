@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useMemo } from "react"
 import Link from "next/link"
 import {
     Sidebar,
@@ -13,10 +13,17 @@ import {
     SidebarMenuItem,
     SidebarRail,
 } from "@/components/ui/sidebar"
-import { User, LogIn, LogOut, Shield, MapPin, Database, Cpu } from "lucide-react"
+import { LogIn, LogOut } from "lucide-react"
 import { AuthDialog } from "@/components/pages/login/login"
 import { Button } from "@/components/ui/button"
 import useUserStore from "@/lib/stores/useUserStore"
+import { defaultSidebarConfig } from "./sidebar.config"
+import type { SidebarConfig } from "./sidebar.types"
+
+interface SidebarGProps {
+  /** 可选配置覆盖。提供 items 将完全替换默认菜单；提供 label 将覆盖标题 */
+  config?: Partial<SidebarConfig>
+}
 
 /** 检查用户是否有 admin 角色 */
 function hasAdminRole(user: { roles?: string[] } | null): boolean {
@@ -24,17 +31,17 @@ function hasAdminRole(user: { roles?: string[] } | null): boolean {
     return user.roles.includes("admin")
 }
 
-const SidebarG = () => {
+const SidebarG = ({ config: configOverride }: SidebarGProps) => {
     const [isLoginOpen, setIsLoginOpen] = useState(false)
 
     const { isAuthenticated, isLoading, loadUser, signOut, user } = useUserStore()
 
-    // 在组件挂载时验证用户状态
-    useEffect(() => {
-        if (isAuthenticated && !user) {
-            loadUser()
-        }
-    }, [isAuthenticated, loadUser, user])
+    // 合并默认配置与外部覆盖
+    const mergedConfig = useMemo<SidebarConfig>(() => ({
+        ...defaultSidebarConfig,
+        ...configOverride,
+        items: configOverride?.items ?? defaultSidebarConfig.items,
+    }), [configOverride])
 
     // 在组件挂载时验证用户状态
     useEffect(() => {
@@ -46,59 +53,28 @@ const SidebarG = () => {
     return (
         <Sidebar collapsible="icon">
             <SidebarContent>
-                <SidebarRail >
-                    
-                </SidebarRail>
+                <SidebarRail />
+
                 <SidebarGroup>
                     <div className="flex items-center justify-between px-2">
-                        <SidebarGroupLabel>导航菜单</SidebarGroupLabel>
+                        <SidebarGroupLabel>{mergedConfig.label}</SidebarGroupLabel>
                     </div>
                     <SidebarGroupContent>
                         <SidebarMenu>
-                            <SidebarMenuItem>
-                                <SidebarMenuButton asChild>
-                                    <Link href="/user">
-                                        <User />
-                                        <span>用户</span>
-                                    </Link>
-                                </SidebarMenuButton>
-                            </SidebarMenuItem>
-                            <SidebarMenuItem>
-                                <SidebarMenuButton asChild>
-                                    <Link href="/monitor">
-                                        <MapPin />
-                                        <span>监控总览</span>
-                                    </Link>
-                                </SidebarMenuButton>
-                            </SidebarMenuItem>
-                            {hasAdminRole(user) && (
-                                <>
-                                    <SidebarMenuItem>
+                            {mergedConfig.items
+                                .filter(item => item.enabled !== false)
+                                .filter(item => !item.requiredRole || hasAdminRole(user))
+                                .map(item => (
+                                    <SidebarMenuItem key={item.href}>
                                         <SidebarMenuButton asChild>
-                                            <Link href="/data">
-                                                <Database />
-                                                <span>数据管理</span>
+                                            <Link href={item.href}>
+                                                <item.icon />
+                                                <span>{item.label}</span>
                                             </Link>
                                         </SidebarMenuButton>
                                     </SidebarMenuItem>
-                                    <SidebarMenuItem>
-                                        <SidebarMenuButton asChild>
-                                            <Link href="/admin">
-                                                <Shield />
-                                                <span>管理员</span>
-                                            </Link>
-                                        </SidebarMenuButton>
-                                    </SidebarMenuItem>
-                                    <SidebarMenuItem>
-                                        <SidebarMenuButton asChild>
-                                            <Link href="/admin/jetson-simulator">
-                                                <Cpu />
-                                                <span>Jetson 模拟器</span>
-                                            </Link>
-                                        </SidebarMenuButton>
-                                    </SidebarMenuItem>
-                                </>
-                            )}
+                                ))}
+
                             <SidebarMenuItem>
                                 {isAuthenticated ? (
                                     <SidebarMenuButton asChild>
