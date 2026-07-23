@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, Suspense } from "react";
 import { AuthRequiredAlert } from "@/components/auth/auth-required-alert";
 import { useRouter } from "next/navigation";
 import {
@@ -45,7 +45,9 @@ export default function HomePage() {
 
     return (
         <div className="flex-1 flex flex-col min-h-screen">
-            <AuthRequiredAlert />
+            <Suspense fallback={null}>
+                <AuthRequiredAlert />
+            </Suspense>
 
             {/* ─── Hero Section ─── */}
             <section className="relative overflow-hidden">
