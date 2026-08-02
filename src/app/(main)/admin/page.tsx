@@ -3,18 +3,33 @@
 import { useState, useEffect, useCallback } from "react"
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import useUserStore from "@/lib/stores/useUserStore"
+import { canAccessAdmin } from "@/lib/auth/permissions"
 import {
   fetchRoles,
   createRole,
+  updateRole,
   deleteRole,
   assignRoleToUser,
   removeRoleFromUser,
-  fetchUsersWithRole,
+  fetchPermissions,
+  fetchRolePermissions,
+  assignPermissionToRole,
+  removePermissionFromRole,
 } from "@/lib/data/roles"
 import { searchUserByEmail } from "@/lib/data/user"
-import type { Role } from "@/lib/types/types"
+import type { Role, Permission } from "@/lib/types/types"
 import { toast } from "sonner"
-import { Shield, Plus, Trash2, ShieldAlert, Loader2, Search, X } from "lucide-react"
+import {
+  Shield,
+  Plus,
+  Trash2,
+  ShieldAlert,
+  Loader2,
+  Search,
+  X,
+  Pencil,
+  KeyRound,
+} from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 import {
@@ -38,10 +53,9 @@ import {
 import { Badge } from "@/components/ui/badge"
 import { Separator } from "@/components/ui/separator"
 
-/** 检查当前用户是否拥有 admin 角色 */
-function isAdmin(user: { roles?: string[] } | null): boolean {
-  if (!user?.roles) return false
-  return user.roles.includes("admin")
+/** 权限显示文本：优先 name，其次 action:resource */
+function permissionLabel(perm: Permission): string {
+  return perm.name || `${perm.action}:${perm.resource}`
 }
 
 export default function AdminPage() {
@@ -56,6 +70,17 @@ export default function AdminPage() {
   const [newRoleName, setNewRoleName] = useState("")
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
   const [roleToDelete, setRoleToDelete] = useState<Role | null>(null)
+
+  // ===== 编辑角色名称状态 =====
+  const [editDialogOpen, setEditDialogOpen] = useState(false)
+  const [roleToEdit, setRoleToEdit] = useState<Role | null>(null)
+  const [editRoleName, setEditRoleName] = useState("")
+
+  // ===== 权限管理状态 =====
+  const [permissionDialogOpen, setPermissionDialogOpen] = useState(false)
+  const [roleForPermissions, setRoleForPermissions] = useState<Role | null>(null)
+  // 当前正在操作的权限（用于按钮 loading）
+  const [mutatingPerm, setMutatingPerm] = useState<{ id: number; type: "assign" | "remove" } | null>(null)
 
   // ===== 用户角色分配状态 =====
   const [searchEmail, setSearchEmail] = useState("")
@@ -80,11 +105,39 @@ export default function AdminPage() {
   } = useQuery<Role[]>({
     queryKey: ["roles"],
     queryFn: fetchRoles,
-    enabled: isAuthenticated && !!user && isAdmin(user),
+    enabled: isAuthenticated && !!user && canAccessAdmin(user),
+  })
+
+  // ===== 获取所有可用权限 =====
+  const {
+    data: allPermissions = [],
+    isLoading: permissionsLoading,
+  } = useQuery<Permission[]>({
+    queryKey: ["permissions"],
+    queryFn: fetchPermissions,
+    enabled: isAuthenticated && !!user && canAccessAdmin(user),
+  })
+
+  // ===== 获取当前正在管理权限的角色的已有权限 =====
+  const {
+    data: currentRolePermissions = [],
+    isLoading: rolePermissionsLoading,
+  } = useQuery<Permission[]>({
+    queryKey: ["role-permissions", roleForPermissions?.id],
+    queryFn: () => fetchRolePermissions(roleForPermissions!.id),
+    enabled: isAuthenticated && !!roleForPermissions,
   })
 
   // ===== 可分配的角色（全部角色 - 用户已有的角色） =====
   const availableRoles = allRoles.filter((r) => !userRoles.includes(r.name))
+
+  // ===== 权限管理派生数据 =====
+  const rolePermissionIds = new Set(currentRolePermissions.map((p) => p.id))
+  const availablePermissions = allPermissions.filter((p) => !rolePermissionIds.has(p.id))
+  const isAssigningPerm = (id: number) =>
+    mutatingPerm?.id === id && mutatingPerm.type === "assign"
+  const isRemovingPerm = (id: number) =>
+    mutatingPerm?.id === id && mutatingPerm.type === "remove"
 
   // ===== 搜索用户：调用后端 GET /users/email/:email 直接查找 =====
   // 该端点返回完整用户对象（含 roles 数组和 is_protected），无需遍历角色
@@ -194,6 +247,17 @@ export default function AdminPage() {
     onError: (error: Error) => toast.error(error.message || "创建角色失败"),
   })
 
+  const updateRoleMutation = useMutation({
+    mutationFn: ({ id, name }: { id: number; name: string }) => updateRole(id, name),
+    onSuccess: (_data, variables) => {
+      toast.success(`角色名称已更新为 "${variables.name}"`)
+      setEditDialogOpen(false)
+      setRoleToEdit(null)
+      queryClient.invalidateQueries({ queryKey: ["roles"] })
+    },
+    onError: (error: Error) => toast.error(error.message || "更新角色失败"),
+  })
+
   const deleteRoleMutation = useMutation({
     mutationFn: (id: number) => deleteRole(id),
     onSuccess: () => {
@@ -204,6 +268,47 @@ export default function AdminPage() {
     },
     onError: (error: Error) => toast.error(error.message || "删除角色失败"),
   })
+
+  // ===== 权限关系 mutations =====
+  const assignPermissionMutation = useMutation({
+    mutationFn: ({ roleId, permissionId }: { roleId: number; permissionId: number }) =>
+      assignPermissionToRole(roleId, permissionId),
+    onSuccess: (_data, variables) => {
+      toast.success("权限分配成功")
+      queryClient.invalidateQueries({ queryKey: ["role-permissions", variables.roleId] })
+      queryClient.invalidateQueries({ queryKey: ["roles"] })
+    },
+    onError: (error: Error) => toast.error(error.message || "分配权限失败"),
+  })
+
+  const removePermissionMutation = useMutation({
+    mutationFn: ({ roleId, permissionId }: { roleId: number; permissionId: number }) =>
+      removePermissionFromRole(roleId, permissionId),
+    onSuccess: (_data, variables) => {
+      toast.success("权限移除成功")
+      queryClient.invalidateQueries({ queryKey: ["role-permissions", variables.roleId] })
+      queryClient.invalidateQueries({ queryKey: ["roles"] })
+    },
+    onError: (error: Error) => toast.error(error.message || "移除权限失败"),
+  })
+
+  const handleAssignPermission = (permissionId: number) => {
+    if (!roleForPermissions) return
+    setMutatingPerm({ id: permissionId, type: "assign" })
+    assignPermissionMutation.mutate(
+      { roleId: roleForPermissions.id, permissionId },
+      { onSettled: () => setMutatingPerm(null) }
+    )
+  }
+
+  const handleRemovePermission = (permissionId: number) => {
+    if (!roleForPermissions) return
+    setMutatingPerm({ id: permissionId, type: "remove" })
+    removePermissionMutation.mutate(
+      { roleId: roleForPermissions.id, permissionId },
+      { onSettled: () => setMutatingPerm(null) }
+    )
+  }
 
   // ===== 权限检查 =====
   if (userLoading) {
@@ -223,7 +328,7 @@ export default function AdminPage() {
     )
   }
 
-  if (!isAdmin(user)) {
+  if (!canAccessAdmin(user)) {
     return (
       <div className="flex flex-col items-center justify-center h-64 gap-4">
         <Shield className="h-12 w-12 text-destructive" />
@@ -243,7 +348,7 @@ export default function AdminPage() {
         <Shield className="h-8 w-8 text-primary" />
         <div>
           <h1 className="text-2xl font-bold">管理员控制面板</h1>
-          <p className="text-sm text-muted-foreground">管理系统角色和用户权限分配</p>
+          <p className="text-sm text-muted-foreground">管理系统角色、权限关系和用户权限分配</p>
         </div>
       </div>
 
@@ -268,7 +373,7 @@ export default function AdminPage() {
           <div className="flex items-center justify-between">
             <div>
               <h2 className="text-lg font-semibold">角色列表</h2>
-              <p className="text-sm text-muted-foreground">管理系统中的所有角色</p>
+              <p className="text-sm text-muted-foreground">管理系统中的所有角色，悬停可编辑名称或管理权限</p>
             </div>
             <Button onClick={() => setCreateDialogOpen(true)}>
               <Plus className="h-4 w-4 mr-2" />
@@ -297,16 +402,44 @@ export default function AdminPage() {
                   <CardHeader className="pb-3">
                     <div className="flex items-center justify-between">
                       <CardTitle className="text-base">{role.name}</CardTitle>
-                      {role.name !== "admin" && (
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-8 w-8 text-destructive opacity-0 group-hover:opacity-100 transition-opacity"
-                          onClick={() => { setRoleToDelete(role); setDeleteDialogOpen(true) }}
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      )}
+                      <div className="flex items-center gap-1">
+                        {/* 权限管理（admin 拥有全部权限，不可管理） */}
+                        {role.name !== "admin" && (
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8 text-muted-foreground hover:text-primary opacity-0 group-hover:opacity-100 transition-opacity"
+                            onClick={() => { setRoleForPermissions(role); setPermissionDialogOpen(true) }}
+                            title={`管理 "${role.name}" 的权限`}
+                          >
+                            <KeyRound className="h-4 w-4" />
+                          </Button>
+                        )}
+                        {/* 编辑名称（admin 为系统保护角色，不可编辑） */}
+                        {role.name !== "admin" && (
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8 text-muted-foreground hover:text-primary opacity-0 group-hover:opacity-100 transition-opacity"
+                            onClick={() => { setRoleToEdit(role); setEditRoleName(role.name); setEditDialogOpen(true) }}
+                            title={`编辑 "${role.name}" 名称`}
+                          >
+                            <Pencil className="h-4 w-4" />
+                          </Button>
+                        )}
+                        {/* 删除（admin 为系统保护角色，不可删除） */}
+                        {role.name !== "admin" && (
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8 text-destructive opacity-0 group-hover:opacity-100 transition-opacity"
+                            onClick={() => { setRoleToDelete(role); setDeleteDialogOpen(true) }}
+                            title={`删除 "${role.name}"`}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        )}
+                      </div>
                     </div>
                     <CardDescription>
                       ID: {role.id}
@@ -316,12 +449,16 @@ export default function AdminPage() {
                     </CardDescription>
                   </CardHeader>
                   <CardContent>
-                    {role.permissions && role.permissions.length > 0 && (
+                    {role.permissions && role.permissions.length > 0 ? (
                       <div className="flex flex-wrap gap-1">
-                        {role.permissions.map((perm) => (
-                          <Badge key={perm.id} variant="outline" className="text-xs">{perm.name}</Badge>
+                        {role.permissions.map((rp) => (
+                          <Badge key={rp.id} variant="outline" className="text-xs">
+                            {rp.permission ? permissionLabel(rp.permission) : `权限#${rp.id}`}
+                          </Badge>
                         ))}
                       </div>
+                    ) : (
+                      <p className="text-xs text-muted-foreground">暂无权限</p>
                     )}
                   </CardContent>
                 </Card>
@@ -548,6 +685,42 @@ export default function AdminPage() {
         </DialogContent>
       </Dialog>
 
+      {/* ===== 编辑角色名称对话框 ===== */}
+      <Dialog open={editDialogOpen} onOpenChange={(open) => { setEditDialogOpen(open); if (!open) setRoleToEdit(null) }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>编辑角色</DialogTitle>
+            <DialogDescription>修改角色 "{roleToEdit?.name}" 的名称。</DialogDescription>
+          </DialogHeader>
+          <form onSubmit={(e) => {
+            e.preventDefault()
+            if (!editRoleName.trim()) { toast.error("请输入角色名称"); return }
+            if (roleToEdit) updateRoleMutation.mutate({ id: roleToEdit.id, name: editRoleName.trim() })
+          }} className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="edit-role-name">角色名称</Label>
+              <Input
+                id="edit-role-name"
+                placeholder="editor"
+                value={editRoleName}
+                onChange={(e) => setEditRoleName(e.target.value)}
+                disabled={updateRoleMutation.isPending}
+                autoFocus
+                required
+              />
+            </div>
+            <DialogFooter>
+              <Button type="button" variant="outline"
+                onClick={() => { setEditDialogOpen(false); setRoleToEdit(null) }}
+                disabled={updateRoleMutation.isPending}>取消</Button>
+              <Button type="submit" disabled={updateRoleMutation.isPending}>
+                {updateRoleMutation.isPending ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" />保存中...</> : "保存"}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
       {/* ===== 删除角色确认对话框 ===== */}
       <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
         <DialogContent>
@@ -563,6 +736,120 @@ export default function AdminPage() {
               onClick={() => { if (roleToDelete) deleteRoleMutation.mutate(roleToDelete.id) }}
               disabled={deleteRoleMutation.isPending}>
               {deleteRoleMutation.isPending ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" />删除中...</> : "确认删除"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ===== 权限管理对话框 ===== */}
+      <Dialog
+        open={permissionDialogOpen}
+        onOpenChange={(open) => { setPermissionDialogOpen(open); if (!open) setRoleForPermissions(null) }}
+      >
+        <DialogContent className="sm:max-w-xl">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <KeyRound className="h-5 w-5 text-primary" />
+              管理 "{roleForPermissions?.name}" 的权限
+            </DialogTitle>
+            <DialogDescription>
+              点击标签为角色添加或移除权限，权限关系修改将实时生效。
+            </DialogDescription>
+          </DialogHeader>
+
+          {/* 已拥有的权限 */}
+          <div className="space-y-2">
+            <h3 className="text-sm font-medium flex items-center gap-2">
+              <Shield className="h-4 w-4 text-blue-500" />
+              已拥有的权限
+              <span className="text-xs text-muted-foreground">点击 × 可移除</span>
+            </h3>
+            {rolePermissionsLoading ? (
+              <div className="flex items-center justify-center h-16">
+                <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+              </div>
+            ) : currentRolePermissions.length === 0 ? (
+              <p className="text-sm text-muted-foreground py-3 text-center border rounded-md">
+                该角色当前没有任何权限
+              </p>
+            ) : (
+              <div className="flex flex-wrap gap-2">
+                {currentRolePermissions.map((perm) => (
+                  <Badge key={perm.id} variant="secondary" className="text-sm px-3 py-1.5 gap-1">
+                    {isRemovingPerm(perm.id) ? (
+                      <Loader2 className="h-3 w-3 animate-spin" />
+                    ) : (
+                      <>
+                        {permissionLabel(perm)}
+                        <span className="text-xs text-muted-foreground">
+                          {perm.action}:{perm.resource}
+                        </span>
+                        <span
+                          className="inline-flex items-center cursor-pointer hover:text-destructive transition-colors pointer-events-auto"
+                          onClick={() => handleRemovePermission(perm.id)}
+                          role="button"
+                          tabIndex={0}
+                          onKeyDown={(e) => { if (e.key === "Enter") handleRemovePermission(perm.id) }}
+                        >
+                          <X className="h-3 w-3" />
+                        </span>
+                      </>
+                    )}
+                  </Badge>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <Separator />
+
+          {/* 可添加的权限 */}
+          <div className="space-y-2">
+            <h3 className="text-sm font-medium flex items-center gap-2">
+              <Plus className="h-4 w-4 text-green-500" />
+              可添加的权限
+              <span className="text-xs text-muted-foreground">点击标签添加</span>
+            </h3>
+            {permissionsLoading ? (
+              <div className="flex items-center justify-center h-16">
+                <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+              </div>
+            ) : availablePermissions.length === 0 ? (
+              <p className="text-sm text-muted-foreground py-3 text-center border rounded-md">
+                该角色已拥有所有可用权限
+              </p>
+            ) : (
+              <div className="flex flex-wrap gap-2">
+                {availablePermissions.map((perm) => (
+                  <Badge
+                    key={perm.id}
+                    variant="outline"
+                    className="cursor-pointer hover:bg-primary hover:text-primary-foreground transition-colors text-sm px-3 py-1.5 select-none"
+                    onClick={() => handleAssignPermission(perm.id)}
+                    role="button"
+                    tabIndex={0}
+                    onKeyDown={(e) => { if (e.key === "Enter") handleAssignPermission(perm.id) }}
+                  >
+                    {isAssigningPerm(perm.id) ? (
+                      <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+                    ) : (
+                      <Plus className="h-3 w-3 mr-1" />
+                    )}
+                    {permissionLabel(perm)}
+                    <span className="text-xs opacity-70">{perm.action}:{perm.resource}</span>
+                  </Badge>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => { setPermissionDialogOpen(false); setRoleForPermissions(null) }}
+            >
+              完成
             </Button>
           </DialogFooter>
         </DialogContent>

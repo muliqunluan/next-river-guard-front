@@ -11,10 +11,11 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import useUserStore from "@/lib/stores/useUserStore";
+import { canAccessAdmin } from "@/lib/auth/permissions";
 
 export default function HomePage() {
     const router = useRouter();
-    const { isAuthenticated, isLoading, loadUser } = useUserStore();
+    const { isAuthenticated, isLoading, loadUser, user } = useUserStore();
 
     // 页面加载时主动检查用户登录状态
     useEffect(() => {
@@ -103,7 +104,7 @@ export default function HomePage() {
                             </CardContent>
                         </Card>
 
-                        {isAuthenticated && (
+                        {isAuthenticated && canAccessAdmin(user) && (
                             <Card
                                 className="group cursor-pointer hover:shadow-lg transition-all duration-300 hover:-translate-y-1"
                                 onClick={() => handleNavigate("/admin")}

@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from "react"
 import useUserStore from "@/lib/stores/useUserStore"
+import { canAccessAdmin } from "@/lib/auth/permissions"
 import { registerCamera, updateCameraStatus, deleteCamera, fetchCameras } from "@/lib/data/cameras"
 import { createEvent } from "@/lib/data/events"
 import { uploadMedia } from "@/lib/data/media"
@@ -37,12 +38,6 @@ import {
 } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
 import { Shield } from "lucide-react"
-
-/** 检查当前用户是否拥有 admin 角色 */
-function isAdmin(user: { roles?: string[] } | null): boolean {
-  if (!user?.roles) return false
-  return user.roles.includes("admin")
-}
 
 /** 模拟事件类型选项 */
 const EVENT_TYPE_OPTIONS = [
@@ -159,7 +154,7 @@ export default function JetsonSimulatorPage() {
   }, [])
 
   useEffect(() => {
-    if (isAuthenticated && user && isAdmin(user)) {
+    if (isAuthenticated && user && canAccessAdmin(user)) {
       loadCameras()
     }
   }, [isAuthenticated, user, loadCameras])
@@ -476,7 +471,7 @@ export default function JetsonSimulatorPage() {
     )
   }
 
-  if (!isAdmin(user)) {
+  if (!canAccessAdmin(user)) {
     return (
       <div className="flex flex-col items-center justify-center h-64 gap-4">
         <Shield className="h-12 w-12 text-destructive" />

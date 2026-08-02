@@ -17,18 +17,13 @@ import { LogIn, LogOut } from "lucide-react"
 import { AuthDialog } from "@/components/pages/login/login"
 import { Button } from "@/components/ui/button"
 import useUserStore from "@/lib/stores/useUserStore"
+import { canAccessAdmin } from "@/lib/auth/permissions"
 import { defaultSidebarConfig } from "./sidebar.config"
 import type { SidebarConfig } from "./sidebar.types"
 
 interface SidebarGProps {
   /** 可选配置覆盖。提供 items 将完全替换默认菜单；提供 label 将覆盖标题 */
   config?: Partial<SidebarConfig>
-}
-
-/** 检查用户是否有 admin 角色 */
-function hasAdminRole(user: { roles?: string[] } | null): boolean {
-    if (!user?.roles) return false
-    return user.roles.includes("admin")
 }
 
 const SidebarG = ({ config: configOverride }: SidebarGProps) => {
@@ -63,7 +58,7 @@ const SidebarG = ({ config: configOverride }: SidebarGProps) => {
                         <SidebarMenu>
                             {mergedConfig.items
                                 .filter(item => item.enabled !== false)
-                                .filter(item => !item.requiredRole || hasAdminRole(user))
+                                .filter(item => !item.requiredRole || canAccessAdmin(user))
                                 .map(item => (
                                     <SidebarMenuItem key={item.href}>
                                         <SidebarMenuButton asChild>

@@ -1,6 +1,6 @@
 // front/src/lib/data/roles.ts
 import client from "./client";
-import { Role, AssignRoleToUserParams } from "../types/types";
+import { Role, Permission, AssignRoleToUserParams } from "../types/types";
 
 /**
  * 获取所有角色列表
@@ -77,10 +77,21 @@ export const removeRoleFromUser = async (email: string, roleName: string): Promi
 };
 
 /**
+ * 获取所有权限（全系统可用权限列表）
+ */
+export const fetchPermissions = async (): Promise<Permission[]> => {
+  const response = await client.get<{ data: Permission[] }>('/permissions');
+  if (response.ok && response.data) {
+    return response.data.data;
+  }
+  throw new Error(response.error || '获取权限列表失败');
+};
+
+/**
  * 获取角色的所有权限
  */
-export const fetchRolePermissions = async (roleId: number): Promise<any[]> => {
-  const response = await client.get<{ data: any[] }>(`/roles/${roleId}/permissions`);
+export const fetchRolePermissions = async (roleId: number): Promise<Permission[]> => {
+  const response = await client.get<{ data: Permission[] }>(`/roles/${roleId}/permissions`);
   if (response.ok && response.data) {
     return response.data.data;
   }

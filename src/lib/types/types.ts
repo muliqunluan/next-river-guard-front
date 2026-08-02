@@ -9,19 +9,27 @@ export interface User {
     last_name: string;
     is_active: boolean;
     roles?: string[];
+    permissions?: string[];
     is_protected?: boolean;
 }
 
 export interface Role {
     id: number;
     name: string;
-    permissions?: Permission[];
+    permissions?: RolePermission[];
+}
+
+export interface RolePermission {
+    id: number;
+    permission: Permission;
 }
 
 export interface Permission {
     id: number;
     name: string;
     description?: string;
+    action: string;
+    resource: string;
 }
 
 export interface LoginParams {
